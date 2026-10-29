@@ -1,3 +1,4 @@
+#!/usr/bin/env ../hexec
 function outer() {
     var x = "outside";
     function inner() {

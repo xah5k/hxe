@@ -1,3 +1,4 @@
+#!/usr/bin/env ../hexec
 function a(b) {
     b();
 }

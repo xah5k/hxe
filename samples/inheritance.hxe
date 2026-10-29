@@ -1,3 +1,4 @@
+#!/usr/bin/env ../hexec
 // syntax: class <classname> : <superclass>
 
 class Shape {
