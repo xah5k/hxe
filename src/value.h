@@ -20,7 +20,7 @@ typedef struct ObjString ObjString;
 #define BOOL_VAL(val) ((Value){VAL_BOOL, {.boolean = val}})
 #define NULL_VAL ((Value){VAL_NULL, {.number = 0}})
 #define NUMBER_VAL(val) ((Value){VAL_NUMBER, {.number = val}})
-#define OBJ_VAL(val) ((Value){VAL_OBJ, {.obj = val}})
+#define OBJ_VAL(val) ((Value){VAL_OBJ, {.obj = (Obj*)val}})
 
 typedef enum {
     VAL_BOOL,

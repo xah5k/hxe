@@ -14,7 +14,7 @@
 void defineNative(const char* name, NativeFn func) {
     push(OBJ_VAL(copyString(name, (int)strlen(name))));
     push(OBJ_VAL(newNative(func)));
-    tableSet(&vm.globals, AS_STRING(vm.stack[0]), vm.stack[1]);
+    tableSet(&vm->globals, AS_STRING(vm->stack[0]), vm->stack[1]);
     pop();
     pop();
 }
@@ -78,7 +78,7 @@ static Value readKeyNative(int argCount, Value* args) {
     if (!fgets(in, sizeof(in), stdin)) {
         printf("\n");
     }
-    Obj* a = copyString(in, (strlen(in) - 1));
+    Obj* a = (Obj*)copyString(in, (strlen(in) - 1));
     return OBJ_VAL(a);
 }
 
@@ -126,7 +126,7 @@ static Value timecNative(int argCount, Value* args) {
         nativeFuncError("Incorrect number of arguments!");
         return NULL_VAL;
     }
-    return NUMBER_VAL(time((long)AS_NUMBER(args[0])));
+    return NUMBER_VAL(time(NULL));
 }
 
 static Value clockcNative(int argCount, Value* args) {
@@ -185,31 +185,6 @@ static Value typeofNative(int argCount, Value* args) {
     return OBJ_VAL(returner);
 }
 
-static Value printToNative(int argCount, Value* args) {
-    char* firstparam = AS_CSTRING(args[0]);
-    printf("debug: firstparam=%s\n", firstparam);
-    //strcpy(firstparam, AS_CSTRING(args[0]));
-    /*
-    accepted strings for `firstparam`:
-    "error",
-    "output"
-    */
-    if (firstparam == "error") {
-        printf("debug: stream=error\n");
-        fprintf(stderr, AS_CSTRING(args[1]));
-        return NULL_VAL;
-    }
-    if (firstparam == "output") {
-        printf("debug: stream=output\n");
-        fprintf(stdout, AS_CSTRING(args[1]));
-        return NULL_VAL;
-    } else if (!(firstparam == "output") && !(firstparam == "error")) {
-        nativeFuncError("error (printToNative:native.c:202): invalid stream!");
-        return NULL_VAL;
-    }
-
-    //return NULL_VAL;
-}
 
 void InitalizeBuiltins() {
     defineNative("_array_append", ArrayAppend);
@@ -234,7 +209,6 @@ void InitalizeBuiltins() {
     defineNative("_inbuilt_pow_eps", powepsNative);
 
     // special typeof
-    defineNative("typeof", typeofNative);
-    defineNative("stdprint", printToNative);
+    defineNative("typeof", typeofNative);;
     
 }

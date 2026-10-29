@@ -68,7 +68,7 @@ void runFile(const char* path) {
 
 
 int main(int argc, const char* argv[]) {
-    VM root;
+    VM* root = malloc(sizeof(VM));
     initVM(root);
     if (argc == 1) {
         repl();
@@ -78,6 +78,7 @@ int main(int argc, const char* argv[]) {
         fprintf(stderr, "Usage: hexec <path>\nNote: passing no arguments will drop you into the REPL ;)\n");
     }
     freeVM();
+    free(root);
     return 0;
 }
 

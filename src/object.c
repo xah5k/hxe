@@ -14,10 +14,10 @@ static Obj* allocateObject(size_t size, ObjType type) {
     Obj* obj = (Obj*)reallocate(NULL, 0, size);
     obj->type = type;
 
-    obj->next = vm.objects;
+    obj->next = vm->objects;
     obj->isMarked = false;
 
-    vm.objects = obj;
+    vm->objects = obj;
 #ifdef DEBUG_LOG_GC
     printf("%p allocate %zu for %d\n", (void*)obj, size, type);
 #endif
@@ -27,7 +27,7 @@ static Obj* allocateObject(size_t size, ObjType type) {
 
 ObjModule* newModule(ObjString* name) {
     Value moduleVal;
-    if (tableGet(&vm.modules, name, &moduleVal)) {
+    if (tableGet(&vm->modules, name, &moduleVal)) {
         return AS_MODULE(moduleVal);
     }
 
@@ -40,7 +40,7 @@ ObjModule* newModule(ObjString* name) {
     push(OBJ_VAL(__file__));
 
     tableSet(&module->values, __file__, OBJ_VAL(name));
-    tableSet(&vm.modules, name, OBJ_VAL(module));
+    tableSet(&vm->modules, name, OBJ_VAL(module));
     pop();
     pop();
     return module;
@@ -149,7 +149,7 @@ static ObjString* allocateString(char* chars, int length, uint32_t hash) {
     string->chars = chars;
     string->hash = hash;
     push(OBJ_VAL(string));
-    tableSet(&vm.strings, string, NULL_VAL);
+    tableSet(&vm->strings, string, NULL_VAL);
     pop();
     return string;
 }
@@ -166,7 +166,7 @@ static uint32_t hashString(const char* key, int length) {
 
 ObjString* takeString(char* chars, int length) {
   uint32_t hash = hashString(chars, length);
-  ObjString* interned = tableFindString(&vm.strings, chars, length,
+  ObjString* interned = tableFindString(&vm->strings, chars, length,
                                         hash);
     if (interned != NULL) {
         FREE_ARRAY(char, chars, length + 1);
@@ -177,7 +177,7 @@ ObjString* takeString(char* chars, int length) {
 }
 ObjString* copyString(const char* chars, int length) {
     uint32_t hash = hashString(chars, length);
-    ObjString* interned = tableFindString(&vm.strings, chars, length,
+    ObjString* interned = tableFindString(&vm->strings, chars, length,
                                         hash);
     if (interned != NULL) return interned;
     char* heapChars = ALLOCATE(char, length + 1);

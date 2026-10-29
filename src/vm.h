@@ -45,9 +45,9 @@ typedef enum {
     INTERPRET_COMPILE_ERROR,
     INTERPRET_RUNTIME_ERROR
 }InterpretResult;
-extern VM vm;
+extern VM* vm;
 
-void initVM(VM nvm);
+void initVM(VM* nvm);
 void freeVM();
 InterpretResult interpret(const char* source, const char* file);
 void push(Value value);

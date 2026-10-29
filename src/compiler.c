@@ -923,7 +923,7 @@ ObjFunction* compile(ObjModule* module,  char* source) {
     initCompiler(&compiler, TYPE_SCRIPT);
     compiler.module = module;
 
-    currentFile = module->path;
+    currentFile = module->path->chars;
     parser.hadError = false;
     parser.panicMode = false;
     InitalizeStdLib(hxe_modulep);

@@ -22,15 +22,15 @@
 
 #define YOUFUCKEDUP NUMBER_VAL(1)
 
-VM vm;
+VM* vm = NULL;
 
 void runtimeError(const char* format, ...);
 static void resetStack();
 
 static void resetStack() {
-    vm.stackTop = vm.stack;
-    vm.frameCount = 0;
-    vm.openUpvalues = NULL;
+    vm->stackTop = vm->stack;
+    vm->frameCount = 0;
+    vm->openUpvalues = NULL;
 }
 
 void runtimeError(const char* format, ...) {
@@ -40,8 +40,8 @@ void runtimeError(const char* format, ...) {
     va_end(args);
     fputs("\n", stderr);
 
-    for (int i = vm.frameCount - 1; i >= 0; i--) {
-        CallFrame* frame = &vm.frames[i];
+    for (int i = vm->frameCount - 1; i >= 0; i--) {
+        CallFrame* frame = &vm->frames[i];
         ObjFunction* function = frame->closure->function;
         size_t instruction = frame->ip - function->chunk.code - 1;
         fprintf(stderr, "[line %d] in ", function->chunk.lines[instruction]);
@@ -69,49 +69,53 @@ static void rmQuotes(char* line, int lineLength) {
 }
 
 
-void initVM(VM nvm) {
-    if (!&nvm) {
+void initVM(VM* nvm) {
+    if (!nvm) {
         fprintf(stderr, "\nerror: invalid vm param passed over!");
         exit(74);
     }
     vm = nvm;
+    if (!vm) {
+        fprintf(stderr, "\nerror: vm = NULL!\n");
+        exit(74);
+    }
     resetStack();
-    vm.objects = NULL;
-    vm.bytesAllocated = 0;
-    vm.nextGC = 1024 * 1024;
-    vm.grayCount = 0;
-    vm.grayCapacity = 0;
-    vm.grayStack = NULL;
-    vm.stdlibLoaded = false;
+    vm->objects = NULL;
+    vm->bytesAllocated = 0;
+    vm->nextGC = 1024 * 1024;
+    vm->grayCount = 0;
+    vm->grayCapacity = 0;
+    vm->grayStack = NULL;
+    vm->stdlibLoaded = false;
 
-    initTable(&vm.globals);
-    initTable(&vm.strings);
-    initTable(&vm.modules);
+    initTable(&vm->globals);
+    initTable(&vm->strings);
+    initTable(&vm->modules);
 
-    vm.initString = NULL;
-    vm.initString = copyString("init", 4);
+    vm->initString = NULL;
+    vm->initString = copyString("init", 4);
     InitalizeBuiltins();
 }
 
 void freeVM() {
-    freeTable(&vm.globals);
-    freeTable(&vm.strings);
-    freeTable(&vm.modules);
-    vm.initString = NULL;
+    freeTable(&vm->globals);
+    freeTable(&vm->strings);
+    freeTable(&vm->modules);
+    vm->initString = NULL;
     freeObjects();
 }
 
 void push(Value value) {
-    *vm.stackTop = value;
-    vm.stackTop++;
+    *vm->stackTop = value;
+    vm->stackTop++;
 }
 Value pop() {
-    vm.stackTop--;
-    return *vm.stackTop;
+    vm->stackTop--;
+    return *vm->stackTop;
 }
 
 static Value peek(int dist) {
-    return vm.stackTop[-1 - dist];
+    return vm->stackTop[-1 - dist];
 }
 
 static bool call(ObjClosure* closure, int argCount) {
@@ -120,15 +124,15 @@ static bool call(ObjClosure* closure, int argCount) {
         return false;
     }
     #ifndef __ALLOW_STACK_OVERFLOW
-    if (vm.frameCount == FRAMES_MAX) {
+    if (vm->frameCount == FRAMES_MAX) {
         runtimeError("Stack overflow.");
         return false;
     }
     #endif
-    CallFrame* frame = &vm.frames[vm.frameCount++];
+    CallFrame* frame = &vm->frames[vm->frameCount++];
     frame->closure = closure;
     frame->ip = closure->function->chunk.code;
-    frame->slots = vm.stackTop - argCount - 1;
+    frame->slots = vm->stackTop - argCount - 1;
     return true;
 }
 static bool callValue(Value callee, int argCount) {
@@ -136,14 +140,14 @@ static bool callValue(Value callee, int argCount) {
         switch(OBJ_TYPE(callee)) {
             case OBJ_BOUND_METHOD: {
                 ObjBoundMethod* bound = AS_BOUND_METHOD(callee);
-                vm.stackTop[-argCount - 1] = bound->receiver;
+                vm->stackTop[-argCount - 1] = bound->receiver;
                 return call(bound->method, argCount);
             }
             case OBJ_CLASS: {
                 ObjClass* kclass = AS_CLASS(callee);
-                vm.stackTop[-argCount - 1] = OBJ_VAL(newInstance(kclass));
+                vm->stackTop[-argCount - 1] = OBJ_VAL(newInstance(kclass));
                 Value initalizer;
-                if (tableGet(&kclass->methods, vm.initString, &initalizer)) {
+                if (tableGet(&kclass->methods, vm->initString, &initalizer)) {
                     return call(AS_CLOSURE(initalizer), argCount);
                 } else if (argCount != 0) {
                     runtimeError("Expected 0 args but got %d args!", argCount);
@@ -155,8 +159,8 @@ static bool callValue(Value callee, int argCount) {
                 return call(AS_CLOSURE(callee), argCount);
             case OBJ_NATIVE:
                 NativeFn native = AS_NATIVE(callee);
-                Value result = native(argCount, vm.stackTop - argCount);
-                vm.stackTop -= argCount - 1;
+                Value result = native(argCount, vm->stackTop - argCount);
+                vm->stackTop -= argCount - 1;
                 push(result);
                 return true;
             default:
@@ -185,7 +189,7 @@ static bool invoke(ObjString* name, int argCount) {
     ObjInstance* instance = AS_INSTANCE(receiver);
     Value value;
     if (tableGet(&instance->fields, name, &value)) {
-        vm.stackTop[-argCount - 1] = value;
+        vm->stackTop[-argCount - 1] = value;
         return callValue(value, argCount);
     }
     return invokeFromClass(instance->kclass, name, argCount);
@@ -203,7 +207,7 @@ static bool bindMethod(ObjClass* kclass, ObjString* name) {
 }
 static ObjUpvalue* captureUpvalue(Value* local) {
     ObjUpvalue* prevUpvalue = NULL;
-    ObjUpvalue* upvalue = vm.openUpvalues;
+    ObjUpvalue* upvalue = vm->openUpvalues;
     while (upvalue != NULL && upvalue->location > local) {
         prevUpvalue = upvalue;
         upvalue = upvalue->next;
@@ -216,7 +220,7 @@ static ObjUpvalue* captureUpvalue(Value* local) {
     ObjUpvalue* createdUpvalue = newUpvalue(local);
     createdUpvalue->next = upvalue;
     if (prevUpvalue == NULL) {
-        vm.openUpvalues = createdUpvalue;
+        vm->openUpvalues = createdUpvalue;
     } else {
         prevUpvalue->next = createdUpvalue;
     }
@@ -224,11 +228,11 @@ static ObjUpvalue* captureUpvalue(Value* local) {
 }
 
 static void closeUpvalues(Value* last) {
-    while (vm.openUpvalues != NULL && vm.openUpvalues->location >= last) {
-        ObjUpvalue* upvalue = vm.openUpvalues;
+    while (vm->openUpvalues != NULL && vm->openUpvalues->location >= last) {
+        ObjUpvalue* upvalue = vm->openUpvalues;
         upvalue->closed = *upvalue->location;
         upvalue->location = &upvalue->closed;
-        vm.openUpvalues = upvalue->next;
+        vm->openUpvalues = upvalue->next;
     }
 }
 
@@ -267,7 +271,7 @@ InterpretResult interpret(const char* source, const char* file) {
     pop();
 
     push(OBJ_VAL(module));
-    module->path = file;
+    module->path = copyString(file, strlen(file));
     pop();
 
     ObjFunction* function = compile(module, source);
@@ -282,7 +286,7 @@ InterpretResult interpret(const char* source, const char* file) {
 }
 
 static InterpretResult run() {
-    CallFrame* frame  = &vm.frames[vm.frameCount - 1];
+    CallFrame* frame  = &vm->frames[vm->frameCount - 1];
     #define READ_BYTE() (*frame->ip++)
     #define READ_CONSTANT() \
         (frame->closure->function->chunk.constants.values[READ_BYTE()])
@@ -304,7 +308,7 @@ static InterpretResult run() {
     for (;;) {
         #ifdef DEBUG_TRACE_EXCEPTION
             printf("          ");
-            for (Value* slot = vm.stack; slot < vm.stackTop; slot++) {
+            for (Value* slot = vm->stack; slot < vm->stackTop; slot++) {
                 printf("[ ");
                 printValue(*slot);
                 printf(" ]");
@@ -377,8 +381,8 @@ static InterpretResult run() {
             }
             case OP_SET_GLOBAL: {
                 ObjString* name = READ_STRING();
-                if (tableSet(&vm.globals, name, peek(0))) {
-                    tableDelete(&vm.globals, name);
+                if (tableSet(&vm->globals, name, peek(0))) {
+                    tableDelete(&vm->globals, name);
                     runtimeError("Undefined variable %s", name->chars);
                     return INTERPRET_RUNTIME_ERROR;
                 }
@@ -387,7 +391,7 @@ static InterpretResult run() {
             case OP_GET_GLOBAL: {
                 ObjString* name = READ_STRING();
                 Value value;
-                if (!tableGet(&vm.globals, name, &value)) {
+                if (!tableGet(&vm->globals, name, &value)) {
                     runtimeError("Undefined variable %s", name->chars);
                     return INTERPRET_RUNTIME_ERROR;
                 }
@@ -396,7 +400,7 @@ static InterpretResult run() {
             }
             case OP_DEFINE_GLOBAL: {
                 ObjString* name = READ_STRING();
-                tableSet(&vm.globals, name, peek(0));
+                tableSet(&vm->globals, name, peek(0));
                 pop();
                 break;
             }
@@ -430,7 +434,7 @@ static InterpretResult run() {
                 if (!callValue(peek(argCount), argCount)) {
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                frame = &vm.frames[vm.frameCount - 1];
+                frame = &vm->frames[vm->frameCount - 1];
                 break;
             }
             case OP_INVOKE: {
@@ -439,7 +443,7 @@ static InterpretResult run() {
                 if (!invoke(method, argCount)) {
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                frame = &vm.frames[vm.frameCount - 1];
+                frame = &vm->frames[vm->frameCount - 1];
                 break;
             }
             case OP_SUPER_INVOKE: {
@@ -449,7 +453,7 @@ static InterpretResult run() {
                 if (!invokeFromClass(superclass, method, argCount)) {
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                frame = &vm.frames[vm.frameCount - 1];
+                frame = &vm->frames[vm->frameCount - 1];
                 break;
             }
             case OP_CLOSURE: {
@@ -472,7 +476,7 @@ static InterpretResult run() {
                 break;
             }
             case OP_CLOSE_UPVALUE: {
-                closeUpvalues(vm.stackTop - 1);
+                closeUpvalues(vm->stackTop - 1);
                 pop();
                 break;
             }
@@ -543,9 +547,9 @@ static InterpretResult run() {
                 ObjString* pathObj = copyString(path, strlen(path));
                 push(OBJ_VAL(pathObj));
 
-                if (tableGet(&vm.modules, pathObj, &moduleVal)) {
+                if (tableGet(&vm->modules, pathObj, &moduleVal)) {
                     pop();
-                    vm.lastModule = AS_MODULE(moduleVal);
+                    vm->lastModule = AS_MODULE(moduleVal);
                     push(NULL_VAL);
                     break;
                 }
@@ -553,8 +557,8 @@ static InterpretResult run() {
                 char* source = readFile(path, true);
 
                 ObjModule* mod = newModule(pathObj);
-                mod->path = path;
-                vm.lastModule = mod;
+                mod->path = copyString(path, 2048);
+                vm->lastModule = mod;
                 pop();
                 push(OBJ_VAL(mod));
                 ObjFunction* function = compile(mod, source);
@@ -569,7 +573,7 @@ static InterpretResult run() {
                 push(OBJ_VAL(closure));
 
                 call(closure, 0);
-                frame = &vm.frames[vm.frameCount - 1];
+                frame = &vm->frames[vm->frameCount - 1];
                 break;
             }
             case OP_MODULO: {
@@ -659,15 +663,15 @@ static InterpretResult run() {
             case OP_RETURN:
                 Value result = pop();
                 closeUpvalues(frame->slots);
-                vm.frameCount--;
-                if (vm.frameCount == 0) {
+                vm->frameCount--;
+                if (vm->frameCount == 0) {
                     pop();
                     return INTERPRET_OK;
                 }
 
-                vm.stackTop = frame->slots;
+                vm->stackTop = frame->slots;
                 push(result);
-                frame = &vm.frames[vm.frameCount - 1];
+                frame = &vm->frames[vm->frameCount - 1];
                 break;
         }
     }
