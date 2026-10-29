@@ -58,8 +58,8 @@ char* readFile(const char* path, bool exitOnFail) {
 }
 
 void runFile(const char* path) {
-    char* source = readFile(path, path);
-    InterpretResult result = interpret(source, false);
+    char* source = readFile(path, false);
+    InterpretResult result = interpret(source, path);
     free(source);
 
     if (result == INTERPRET_COMPILE_ERROR) exit(65);

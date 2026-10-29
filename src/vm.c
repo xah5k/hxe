@@ -271,7 +271,7 @@ InterpretResult interpret(const char* source, const char* file) {
     pop();
 
     push(OBJ_VAL(module));
-    module->path = copyString(file, strlen(file));
+    if (file) module->path = copyString(file, strlen(file));
     pop();
 
     ObjFunction* function = compile(module, source);
